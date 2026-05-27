@@ -1,63 +1,122 @@
-using System.Xml.Serialization;
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
-    //ˆÚ“®ˆ—
+    [Header("ç§»å‹•è¨­å®š")]
     [SerializeField] private float moveSpeed;
     [SerializeField] private float jumpForce;
 
-    //Ú’n”»’è
+    [Header("æ¥åœ°åˆ¤å®šã®è¨­å®š")]
     [SerializeField] private Transform groundCheck;
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private Vector2 groundCheckSize = new Vector2(0.5f, 0.1f);
+
+    [Header("ãƒ¯ã‚¤ãƒ¤ãƒ¼ã‚¢ã‚¯ã‚·ãƒ§ãƒ³è¨­å®š")]
+    [SerializeField] private LayerMask canGrappleLayer;
 
     private Rigidbody2D rb;
     private float horizontalInput;
     private bool isGrounded;
 
+    private DistanceJoint2D distanceJoint;
+    private LineRenderer lineRenderer;
+    private Vector2 grapplePoint;
+    private bool isGrappling = false;
+
     void Start()
     {
-        // Rigidbody2DƒRƒ“ƒ|[ƒlƒ“ƒg‚ğæ“¾
         rb = GetComponent<Rigidbody2D>();
+        lineRenderer = GetComponent<LineRenderer>();
+        lineRenderer.positionCount = 0;
     }
 
     void Update()
     {
-        // ’n–Ê‚Éİ’u‚µ‚Ä‚¢‚é‚©‚Ç‚¤‚©
-        isGrounded = Physics2D.OverlapBox(groundCheck.position, groundCheckSize, 0f, LayerMask.GetMask("Ground"));
+        isGrounded = Physics2D.OverlapBox(groundCheck.position, groundCheckSize, 0f, groundLayer);
+
+        rb.linearVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
+
+        if (Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            StartGrapple();
+        }
+        // ãƒã‚¦ã‚¹ãŒé›¢ã•ã‚ŒãŸã‚‰ãƒ¯ã‚¤ãƒ¤ãƒ¼ã‚’è§£é™¤ã™ã‚‹
+        else if (Mouse.current.leftButton.wasReleasedThisFrame)
+        {
+            StopGrapple();
+        }
+
+        if (isGrappling)
+        {
+            lineRenderer.SetPosition(0, transform.position);
+            lineRenderer.SetPosition(1, grapplePoint);
+        }
     }
 
-    void FixedUpdate()
+    private void StartGrapple()
     {
-        // …•½•ûŒü‚ÌˆÚ“®
-        rb.linearVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
+        Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
+        Vector2 direction = mousePos - (Vector2)transform.position;
+
+        // 
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, 30f, canGrappleLayer);
+
+        if (hit.collider != null)
+        {
+            Debug.Log("ãƒ¯ã‚¤ãƒ¤ãƒ¼ãŒãƒ’ãƒƒãƒˆã—ã¾ã—ãŸï¼: " + hit.collider.name);
+            grapplePoint = hit.point;
+
+            distanceJoint = gameObject.AddComponent<DistanceJoint2D>();
+            distanceJoint.autoConfigureDistance = false;
+            distanceJoint.distance = Vector2.Distance(transform.position, grapplePoint);
+            distanceJoint.connectedAnchor = grapplePoint;
+
+            lineRenderer.positionCount = 2;
+            isGrappling = true;
+        }
+        else
+        {
+            Debug.Log("ã‚¯ãƒªãƒƒã‚¯ã—ãŸæ–¹å‘ã«ãƒ¯ã‚¤ãƒ¤ãƒ¼ãŒåˆºã•ã‚‹å£ãŒã‚ã‚Šã¾ã›ã‚“ã€‚");
+        }
+    }
+
+    private void StopGrapple()
+    {
+        if (isGrappling)
+        {
+            Debug.Log("ãƒ¯ã‚¤ãƒ¤ãƒ¼ã‚’è§£é™¤ã—ã¾ã—ãŸã€‚");
+        }
+        isGrappling = false;
+        lineRenderer.positionCount = 0;
+
+        if (distanceJoint != null)
+        {
+            Destroy(distanceJoint);
+        }
     }
 
     public void OnMove(InputValue value)
     {
-        // …•½•ûŒü‚Ì“ü—Í‚ğæ“¾
         Vector2 moveVector = value.Get<Vector2>();
         horizontalInput = moveVector.x;
     }
 
     public void OnJump(InputValue value)
     {
-        // ƒWƒƒƒ“ƒv‚Ì“ü—Í‚ğæ“¾
-        if (value.isPressed && isGrounded)
+        if (value.isPressed && rb != null)
         {
-            rb.linearVelocity =new Vector2(rb.linearVelocity.x, jumpForce);
+            if (isGrappling)
+            {
+                StopGrapple();
+            }
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
     }
 
-    // Unity‚ÌƒGƒfƒBƒ^‰æ–Ê‚ÉÚ’n”»’è‚Ì˜gü‚ğ•\¦‚·‚é
     private void OnDrawGizmos()
     {
-        if (groundCheck != null)
-        {
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
-        }
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
     }
 }
