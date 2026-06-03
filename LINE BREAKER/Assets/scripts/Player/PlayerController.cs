@@ -1,13 +1,13 @@
 ﻿using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement; 
+using UnityEngine.SceneManagement;
 
 public class PlayerController : MonoBehaviour
 {
     [Header("移動設定")]
-    [SerializeField] private float walkSpeed;
-    [SerializeField] private float dashSpeed;
-    [SerializeField] private float jumpForce;
+    [SerializeField] private float walkSpeed = 10f;
+    [SerializeField] private float dashSpeed = 18f;
+    [SerializeField] private float jumpForce = 12f;
 
     [Header("落下死（ゲームオーバー）設定")]
     [SerializeField] private float deathYThreshold = -10f;
@@ -19,7 +19,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("ワイヤーアクション設定")]
     [SerializeField] private LayerMask canGrappleLayer;
-    [SerializeField] private float swingForce = 1f;
+    [SerializeField] private float swingForce = 30f;
 
     private Rigidbody2D rb;
     private float horizontalInput;
@@ -45,6 +45,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // Updateは「入力の監視」と「見た目（LineRenderer）の更新」だけに専念させる
     void Update()
     {
         if (groundCheck != null)
@@ -64,27 +65,7 @@ public class PlayerController : MonoBehaviour
             DieAndChangeScene();
         }
 
-        // 移動・スイング処理
-        if (rb != null)
-        {
-            if (isGrappling)
-            {
-                rb.AddForce(new Vector2(horizontalInput * swingForce, 0f), ForceMode2D.Force);
-            }
-            else
-            {
-                bool keepDashSpeed = (isGrounded && Keyboard.current.leftShiftKey.isPressed) || (isDashJumping && horizontalInput != 0f);
-                float currentMaxSpeed = keepDashSpeed ? dashSpeed : walkSpeed;
-
-                if (horizontalInput == 0f)
-                {
-                    isDashJumping = false;
-                }
-
-                rb.linearVelocity = new Vector2(horizontalInput * currentMaxSpeed, rb.linearVelocity.y);
-            }
-        }
-
+        // 直接マウス入力を監視
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
             StartGrapple();
@@ -94,6 +75,7 @@ public class PlayerController : MonoBehaviour
             StopGrapple();
         }
 
+        // ワイヤーの見た目の更新（描画はUpdateで行うのが最も滑らかになります）
         if (isGrappling)
         {
             lineRenderer.SetPosition(0, transform.position);
@@ -101,15 +83,38 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // ★【ここが超重要！】すべての物理移動処理をここに集約
+    // PCの性能や軽さに影響されず、常に世界共通の同じ物理挙動になります
+    void FixedUpdate()
+    {
+        if (rb == null) return;
+
+        if (isGrappling)
+        {
+            // ワイヤー中のスイング加速（Time.fixedDeltaTimeをかけることでフレームレートの差を完全に無くします）
+            rb.AddForce(new Vector2(horizontalInput * swingForce * 10f * Time.fixedDeltaTime, 0f), ForceMode2D.Impulse);
+        }
+        else
+        {
+            // 通常移動およびダッシュジャンプの慣性維持
+            bool keepDashSpeed = (isGrounded && Keyboard.current.leftShiftKey.isPressed) || (isDashJumping && horizontalInput != 0f);
+            float currentMaxSpeed = keepDashSpeed ? dashSpeed : walkSpeed;
+
+            if (horizontalInput == 0f)
+            {
+                isDashJumping = false;
+            }
+
+            rb.linearVelocity = new Vector2(horizontalInput * currentMaxSpeed, rb.linearVelocity.y);
+        }
+    }
+
     private void DieAndChangeScene()
     {
-        UnityEngine.Debug.Log("画面外に落下しました！ゲームオーバーシーンに移行します。");
-
         if (isGrappling)
         {
             StopGrapple();
         }
-
         SceneManager.LoadScene("GameOverScene");
     }
 
@@ -122,7 +127,6 @@ public class PlayerController : MonoBehaviour
 
         if (hit.collider != null)
         {
-            UnityEngine.Debug.Log("ワイヤーがヒットしました！: " + hit.collider.name);
             grapplePoint = hit.point;
 
             springJoint = gameObject.AddComponent<SpringJoint2D>();
@@ -146,19 +150,23 @@ public class PlayerController : MonoBehaviour
     {
         if (isGrappling)
         {
-            UnityEngine.Debug.Log("ワイヤーを解除しました。");
-        }
-        isGrappling = false;
-        lineRenderer.positionCount = 0;
+            isGrappling = false;
+            lineRenderer.positionCount = 0;
 
-        if (rb != null)
-        {
-            rb.linearDamping = originalDrag;
-        }
+            if (rb != null)
+            {
+                rb.linearDamping = originalDrag;
 
-        if (springJoint != null)
-        {
-            Destroy(springJoint);
+                if (Mathf.Abs(rb.linearVelocity.x) > 2f)
+                {
+                    rb.linearVelocity = new Vector2(rb.linearVelocity.x * 1.1f, rb.linearVelocity.y);
+                }
+            }
+
+            if (springJoint != null)
+            {
+                Destroy(springJoint);
+            }
         }
     }
 
