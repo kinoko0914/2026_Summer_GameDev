@@ -2,7 +2,7 @@
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController1 : MonoBehaviour
 {
     [Header("移動設定")]
     [SerializeField] private float walkSpeed = 10f;
@@ -45,6 +45,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // Updateは「入力の監視」と「見た目（LineRenderer）の更新」だけに専念させる
     void Update()
     {
         if (groundCheck != null)
@@ -82,13 +83,15 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // ★【ここが超重要！】すべての物理移動処理をここに集約
+    // PCの性能や軽さに影響されず、常に世界共通の同じ物理挙動になります
     void FixedUpdate()
     {
         if (rb == null) return;
 
         if (isGrappling)
         {
-            // ワイヤー中のスイング加速
+            // ワイヤー中のスイング加速（Time.fixedDeltaTimeをかけることでフレームレートの差を完全に無くします）
             rb.AddForce(new Vector2(horizontalInput * swingForce * 10f * Time.fixedDeltaTime, 0f), ForceMode2D.Impulse);
         }
         else
@@ -112,7 +115,7 @@ public class PlayerController : MonoBehaviour
         {
             StopGrapple();
         }
-        SceneManager.LoadScene("GameOverScene");
+        SceneManager.LoadScene("GameOverScene1");
     }
 
     private void StartGrapple()

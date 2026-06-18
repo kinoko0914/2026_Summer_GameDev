@@ -2,13 +2,13 @@ using UnityEngine;
 using UnityEngine.SceneManagement; // シーン切り替え
 using UnityEngine.EventSystems;
 
-public class TitleManager : MonoBehaviour
+public class ClearManager1 : MonoBehaviour
 {
     [SerializeField] private GameObject firstSelectedButton;
 
     private Vector3 lastMousePosition;
 
-    // タイトル画面の最初に選択されるボタンを設定
+    // クリア画面の最初に選択されるボタン（Retryボタンなど）を設定
     void Start()
     {
         if (firstSelectedButton != null)
@@ -23,7 +23,6 @@ public class TitleManager : MonoBehaviour
 
     void Update()
     {
-        // マウスの位置が前回の位置から動いた場合、選択を解除
         if (Vector3.Distance(Input.mousePosition, lastMousePosition) > 0.1f)
         {
             if (EventSystem.current.currentSelectedGameObject != null)
@@ -33,11 +32,10 @@ public class TitleManager : MonoBehaviour
         }
         lastMousePosition = Input.mousePosition;
 
-        // 十字キーやスティック入力があった場合、最初のボタンを再度選択
         float verticalInput = Input.GetAxis("Vertical");
         float horizontalInput = Input.GetAxis("Horizontal");
 
-        if(verticalInput != 0 || horizontalInput != 0)
+        if (verticalInput != 0 || horizontalInput != 0)
         {
             if (EventSystem.current.currentSelectedGameObject == null && firstSelectedButton != null)
             {
@@ -46,18 +44,14 @@ public class TitleManager : MonoBehaviour
         }
     }
 
-    private void UpdateSecection(GameObject target)
+    public void OnRetryButtonClick()
     {
-        EventSystem.current.SetSelectedGameObject(target);
+        SceneManager.LoadScene("GameScene1");
     }
 
-    public void OnStartButtonClick()
+    // 「タイトルへ」ボタンが押されたとき
+    public void OnTitleButtonClick()
     {
-        SceneManager.LoadScene("SelectScene"); // ゲームシーンに切り替え
-    }
-
-    public void OnExitButtonClick()
-    {
-        Application.Quit(); // アプリケーションを終了
+        SceneManager.LoadScene("TitleScene"); 
     }
 }

@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement; // シーン切り替え
 using UnityEngine.EventSystems;
 
-public class TitleManager : MonoBehaviour
+public class StageSelectManager : MonoBehaviour
 {
     [SerializeField] private GameObject firstSelectedButton;
 
@@ -53,11 +53,11 @@ public class TitleManager : MonoBehaviour
 
     public void OnStartButtonClick()
     {
-        SceneManager.LoadScene("SelectScene"); // ゲームシーンに切り替え
+        SceneManager.LoadScene("GameScene"); // ゲームシーンに切り替え
     }
 
-    public void OnExitButtonClick()
+    public void OnStartButtonClick1()
     {
-        Application.Quit(); // アプリケーションを終了
+        SceneManager.LoadScene("GameScene1"); // ゲームシーンに切り替え
     }
 }
