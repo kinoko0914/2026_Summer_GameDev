@@ -20,6 +20,7 @@ public class PlayerController : MonoBehaviour
     [Header("ワイヤーアクション設定")]
     [SerializeField] private LayerMask canGrappleLayer;
     [SerializeField] private float swingForce = 30f;
+    [SerializeField] private Transform wireFirePoint;
 
     private Rigidbody2D rb;
     private float horizontalInput;
@@ -33,10 +34,15 @@ public class PlayerController : MonoBehaviour
     private float originalDrag;
     private bool isDashJumping = false;
 
+    private Animator animator;
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         lineRenderer = GetComponent<LineRenderer>();
+
+        animator = GetComponentInChildren<Animator>();
+
         lineRenderer.positionCount = 0;
 
         if (rb != null)
@@ -44,7 +50,6 @@ public class PlayerController : MonoBehaviour
             originalDrag = rb.linearDamping;
         }
     }
-
     void Update()
     {
         if (groundCheck != null)
@@ -55,16 +60,15 @@ public class PlayerController : MonoBehaviour
             if (isGrounded && !wasGrounded)
             {
                 isDashJumping = false;
+                if (SoundManager.Instance != null) SoundManager.Instance.PlayLandSE();
             }
         }
 
-        // 死亡判定
         if (transform.position.y < deathYThreshold)
         {
             DieAndChangeScene();
         }
 
-        // 直接マウス入力を監視
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
             StartGrapple();
@@ -74,11 +78,28 @@ public class PlayerController : MonoBehaviour
             StopGrapple();
         }
 
-        // ワイヤーの見た目の更新（描画はUpdateで行うのが最も滑らかになります）
         if (isGrappling)
         {
-            lineRenderer.SetPosition(0, transform.position);
+            lineRenderer.SetPosition(0, wireFirePoint != null ? wireFirePoint.position : transform.position);
             lineRenderer.SetPosition(1, grapplePoint);
+        }
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", Mathf.Abs(rb.linearVelocity.x));
+
+            animator.SetBool("IsGrounded", isGrounded);
+
+            animator.SetFloat("VerticalVelocity", rb.linearVelocity.y);
+
+            if (horizontalInput > 0.1f)
+            {
+                transform.localScale = new Vector3(Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+            }
+            else if (horizontalInput < -0.1f)
+            {
+                transform.localScale = new Vector3(-Mathf.Abs(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+            }
         }
     }
 
@@ -88,12 +109,10 @@ public class PlayerController : MonoBehaviour
 
         if (isGrappling)
         {
-            // ワイヤー中のスイング加速
             rb.AddForce(new Vector2(horizontalInput * swingForce * 10f * Time.fixedDeltaTime, 0f), ForceMode2D.Impulse);
         }
         else
         {
-            // 通常移動およびダッシュジャンプの慣性維持
             bool keepDashSpeed = (isGrounded && Keyboard.current.leftShiftKey.isPressed) || (isDashJumping && horizontalInput != 0f);
             float currentMaxSpeed = keepDashSpeed ? dashSpeed : walkSpeed;
 
@@ -118,9 +137,10 @@ public class PlayerController : MonoBehaviour
     private void StartGrapple()
     {
         Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-        Vector2 direction = mousePos - (Vector2)transform.position;
+        Vector2 startPos = wireFirePoint != null ? (Vector2)wireFirePoint.position : (Vector2)transform.position;
+        Vector2 direction = mousePos - startPos;
 
-        RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, 30f, canGrappleLayer);
+        RaycastHit2D hit = Physics2D.Raycast(startPos, direction, 30f, canGrappleLayer);
 
         if (hit.collider != null)
         {
@@ -129,7 +149,7 @@ public class PlayerController : MonoBehaviour
             springJoint = gameObject.AddComponent<SpringJoint2D>();
             springJoint.autoConfigureDistance = false;
 
-            springJoint.distance = Vector2.Distance(transform.position, grapplePoint);
+            springJoint.distance = Vector2.Distance(startPos, grapplePoint);
             springJoint.connectedAnchor = grapplePoint;
 
             springJoint.frequency = 0f;
@@ -140,6 +160,13 @@ public class PlayerController : MonoBehaviour
 
             lineRenderer.positionCount = 2;
             isGrappling = true;
+
+            if (SoundManager.Instance != null) SoundManager.Instance.PlayGrappleSE();
+
+            if (animator != null)
+            {
+                animator.SetBool("IsGrappling", true);
+            }
         }
     }
 
@@ -150,6 +177,8 @@ public class PlayerController : MonoBehaviour
             isGrappling = false;
             lineRenderer.positionCount = 0;
 
+            if (SoundManager.Instance != null) SoundManager.Instance.PlayReleaseSE();
+
             if (rb != null)
             {
                 rb.linearDamping = originalDrag;
@@ -157,6 +186,16 @@ public class PlayerController : MonoBehaviour
                 if (Mathf.Abs(rb.linearVelocity.x) > 2f)
                 {
                     rb.linearVelocity = new Vector2(rb.linearVelocity.x * 1.1f, rb.linearVelocity.y);
+                }
+
+                if (animator != null)
+                {
+                    animator.SetBool("IsGrappling", false);
+
+                    if (!isGrounded)
+                    {
+                        animator.SetTrigger("JumpTrigger");
+                    }
                 }
             }
 
@@ -188,6 +227,13 @@ public class PlayerController : MonoBehaviour
                     isDashJumping = true;
                 }
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+
+                if (SoundManager.Instance != null) SoundManager.Instance.PlayJumpSE();
+
+                if (animator != null)
+                {
+                    animator.SetTrigger("JumpTrigger");
+                }
             }
         }
     }
