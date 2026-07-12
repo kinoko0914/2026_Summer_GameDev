@@ -5,7 +5,7 @@ using TMPro;
 public class PlayerHealth : MonoBehaviour
 {
     [Header("最大ライフ（残機）")]
-    [SerializeField] private int maxLife = 3;
+    [SerializeField] private int maxLife = 5;
 
     [Header("表示するTextMeshProテキスト")]
     [SerializeField] private TextMeshProUGUI lifeText;
@@ -21,7 +21,9 @@ public class PlayerHealth : MonoBehaviour
     public void TakeDamage()
     {
         currentLife--; 
-        UpdateLifeUI(); 
+        UpdateLifeUI();
+
+        if (SoundManager.Instance != null) SoundManager.Instance.PlayDamageSE();
 
         if (currentLife <= 0)
         {

@@ -22,6 +22,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float swingForce = 30f;
     [SerializeField] private Transform wireFirePoint;
 
+    [Header("照準の設定")]
+    [SerializeField] private Transform aimStandard; 
+    [SerializeField] private float aimDistance = 2f; 
+
     private Rigidbody2D rb;
     private float horizontalInput;
     private bool isGrounded;
@@ -36,11 +40,18 @@ public class PlayerController : MonoBehaviour
 
     private Animator animator;
 
+    private enum InputMode { Mouse, Gamepad }
+    private InputMode currentInputMode = InputMode.Mouse;
+    private Vector2 gamepadAimDirection = Vector2.right;
+    private bool isDashPressed = false;
+
+    public Vector2 AimDirection { get; private set; }
+    public bool IsUsingGamepadAim { get; private set; }
+
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         lineRenderer = GetComponent<LineRenderer>();
-
         animator = GetComponentInChildren<Animator>();
 
         lineRenderer.positionCount = 0;
@@ -50,6 +61,7 @@ public class PlayerController : MonoBehaviour
             originalDrag = rb.linearDamping;
         }
     }
+
     void Update()
     {
         if (groundCheck != null)
@@ -69,11 +81,28 @@ public class PlayerController : MonoBehaviour
             DieAndChangeScene();
         }
 
-        if (Mouse.current.leftButton.wasPressedThisFrame)
+        UpdateAimDirection();
+
+        bool isGrappleJustPressed = false;
+        bool isGrappleJustReleased = false;
+
+        if (Mouse.current != null)
+        {
+            if (Mouse.current.leftButton.wasPressedThisFrame) isGrappleJustPressed = true;
+            if (Mouse.current.leftButton.wasReleasedThisFrame) isGrappleJustReleased = true;
+        }
+
+        if (Gamepad.current != null)
+        {
+            if (Gamepad.current.rightShoulder.wasPressedThisFrame) isGrappleJustPressed = true;
+            if (Gamepad.current.rightShoulder.wasReleasedThisFrame) isGrappleJustReleased = true;
+        }
+
+        if (isGrappleJustPressed)
         {
             StartGrapple();
         }
-        else if (Mouse.current.leftButton.wasReleasedThisFrame)
+        else if (isGrappleJustReleased)
         {
             StopGrapple();
         }
@@ -87,9 +116,7 @@ public class PlayerController : MonoBehaviour
         if (animator != null)
         {
             animator.SetFloat("Speed", Mathf.Abs(rb.linearVelocity.x));
-
             animator.SetBool("IsGrounded", isGrounded);
-
             animator.SetFloat("VerticalVelocity", rb.linearVelocity.y);
 
             if (horizontalInput > 0.1f)
@@ -113,7 +140,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            bool keepDashSpeed = (isGrounded && Keyboard.current.leftShiftKey.isPressed) || (isDashJumping && horizontalInput != 0f);
+            bool keepDashSpeed = (isGrounded && isDashPressed) || (isDashJumping && horizontalInput != 0f);
             float currentMaxSpeed = keepDashSpeed ? dashSpeed : walkSpeed;
 
             if (horizontalInput == 0f)
@@ -134,13 +161,50 @@ public class PlayerController : MonoBehaviour
         SceneManager.LoadScene("GameOverScene");
     }
 
+    private void UpdateAimDirection()
+    {
+        Vector2 startPos = wireFirePoint != null ? (Vector2)wireFirePoint.position : (Vector2)transform.position;
+
+        // マウスとコントローラーの入力リアルタイム自動判定
+        if (Gamepad.current != null && Gamepad.current.rightStick.ReadValue().sqrMagnitude > 0.1f)
+        {
+            currentInputMode = InputMode.Gamepad;
+        }
+        else if (Mouse.current != null && (Mouse.current.delta.ReadValue().sqrMagnitude > 0.01f || Mouse.current.leftButton.isPressed))
+        {
+            currentInputMode = InputMode.Mouse;
+        }
+
+        if (currentInputMode == InputMode.Gamepad)
+        {
+            if (Gamepad.current != null && Gamepad.current.rightStick.ReadValue().sqrMagnitude > 0.1f)
+            {
+                gamepadAimDirection = Gamepad.current.rightStick.ReadValue().normalized;
+            }
+            AimDirection = gamepadAimDirection;
+            IsUsingGamepadAim = true;
+        }
+        else
+        {
+            if (Mouse.current != null)
+            {
+                Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
+                AimDirection = (mousePos - startPos).normalized;
+            }
+            IsUsingGamepadAim = false;
+        }
+
+        if (aimStandard != null)
+        {
+            aimStandard.position = startPos + AimDirection * aimDistance;
+        }
+    }
+
     private void StartGrapple()
     {
-        Vector2 mousePos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         Vector2 startPos = wireFirePoint != null ? (Vector2)wireFirePoint.position : (Vector2)transform.position;
-        Vector2 direction = mousePos - startPos;
 
-        RaycastHit2D hit = Physics2D.Raycast(startPos, direction, 30f, canGrappleLayer);
+        RaycastHit2D hit = Physics2D.Raycast(startPos, AimDirection, 30f, canGrappleLayer);
 
         if (hit.collider != null)
         {
@@ -222,7 +286,7 @@ public class PlayerController : MonoBehaviour
             }
             else if (isGrounded)
             {
-                if (Keyboard.current.leftShiftKey.isPressed)
+                if (isDashPressed)
                 {
                     isDashJumping = true;
                 }
@@ -237,6 +301,15 @@ public class PlayerController : MonoBehaviour
             }
         }
     }
+
+    public void OnSprint(InputValue value)
+    {
+        isDashPressed = value.isPressed;
+    }
+
+    public void OnGrapple(InputValue value) { }
+    public void OnAim(InputValue value) { }
+    public void OnMouseMove(InputValue value) { }
 
     private void OnDrawGizmos()
     {
